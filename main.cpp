@@ -145,7 +145,8 @@ void test_xmlser()
     serialize_xml(u0, "ud", "u.xml");
     deserialize_xml(u1, "ud", "u.xml");
     assert(u0.idx == u1.idx && u0.idy == u1.idy && u0.name == u1.name && u0.data == u1.data);
-    std::cout << "User Defined Type assertion passed!\n"
+    std::cout << "User Defined Type assertion passed!\n";
+    std::cout << "Basic XML serialization tests passed!\n"
               << "----------------------------------------\n";
 }
 
@@ -165,7 +166,8 @@ void test_xmlser_base64()
     deserialize_xml(arr1, "int_array", "int_array.xml");
     for (int i = 0; i < 4; ++i)
         assert(arr0[i] == arr1[i]);
-    std::cout << "Raw array base64 XML assertion passed!\n"
+    std::cout << "Raw array base64 XML assertion passed!\n";
+    std::cout << "Base64 binary serialization tests passed!\n"
               << "----------------------------------------\n";
 }
 
@@ -173,10 +175,9 @@ int main()
 {
 
     test_binser();
-    std::cout << "Binary serialization tests passed!\n";
     test_xmlser();
     test_xmlser_base64();
-    std::cout << "XML serialization tests passed!\n";
-    std::cout << "All tests passed!\n";
+    std::cout << "All tests passed!\n"
+              << "----------------------------------------\n";
     return 0;
 }

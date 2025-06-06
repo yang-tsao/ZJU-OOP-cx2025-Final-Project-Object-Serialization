@@ -1,3 +1,50 @@
+/**
+ * @file xmlser.hpp
+ * @brief Generic C++ XML serialization/deserialization library using TinyXML2.
+ *
+ * This header provides a set of template functions and type traits to serialize and deserialize
+ * a wide range of C++ types (including STL containers, pairs, maps, and user-defined types)
+ * to and from XML files using the TinyXML2 library. It also supports base64 encoding for
+ * non-arithmetic trivially copyable types and provides a macro to simplify user-defined type support.
+ *
+ * Features:
+ * - Serialization/deserialization for:
+ *   - Arithmetic types (as XML attributes)
+ *   - Trivially copyable types (as base64-encoded text)
+ *   - std::string
+ *   - std::pair
+ *   - Standard containers: std::vector, std::list, std::set, std::deque, std::unordered_set
+ *   - std::map
+ *   - std::unique_ptr
+ *   - User-defined types (via XMLSERIALIZABLE macro)
+ * - Type traits and concepts to detect supported types and containers.
+ * - File-level entry points for saving/loading objects to/from XML files.
+ * - Extensible: fallback for user-defined types requiring serialize_xml/deserialize_xml member functions.
+ *
+ * Usage:
+ *   - For user-defined types, use the XMLSERIALIZABLE macro to declare serializable members.
+ *   - Call xmlser::serialize_xml(obj, name, filename) to serialize to file.
+ *   - Call xmlser::deserialize_xml(obj, name, filename) to deserialize from file.
+ *
+ * Dependencies:
+ *   - TinyXML2 (https://github.com/leethomason/tinyxml2)
+ *   - base64.hpp (must provide base64::base64_encode and base64::base64_decode)
+ *
+ * Example:
+ *   struct MyStruct {
+ *       int a;
+ *       std::string b;
+ *       XMLSERIALIZABLE(a, b)
+ *   };
+ *   MyStruct s{42, "hello"};
+ *   xmlser::serialize_xml(s, "MyStruct", "file.xml");
+ *   MyStruct t;
+ *   xmlser::deserialize_xml(t, "MyStruct", "file.xml");
+ *
+ * @namespace xmlser
+ * @author (Cao Yang)
+ * @date (2025/06/06)
+ */
 #pragma once
 #include "base64.hpp"
 #include <deque>
@@ -65,9 +112,10 @@ namespace xmlser
     std::enable_if_t<std::is_trivially_copyable_v<T>>
     serialize_xml(const T &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
     {
-        if constexpr (std::is_arithmetic_v<T>) {
+        if constexpr (std::is_arithmetic_v<T>)
             elem->SetAttribute("val", obj);
-        } else {
+        else
+        {
             // base64 encode
             std::string b64;
             base64::base64_encode(b64, reinterpret_cast<const uint8_t *>(&obj), sizeof(T));
@@ -80,12 +128,14 @@ namespace xmlser
     std::enable_if_t<std::is_trivially_copyable_v<T>>
     deserialize_xml(T &obj, const tinyxml2::XMLElement *elem)
     {
-        if constexpr (std::is_arithmetic_v<T>) {
+        if constexpr (std::is_arithmetic_v<T>)
             elem->QueryAttribute("val", &obj);
-        } else {
+        else
+        {
             // base64 decode
             const char *txt = elem->GetText();
-            if (!txt) throw std::runtime_error("Missing base64 text for trivially copyable type");
+            if (!txt)
+                throw std::runtime_error("Missing base64 text for trivially copyable type");
             std::string b64 = txt;
             std::string decoded;
             base64::base64_decode(decoded, b64);
