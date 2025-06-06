@@ -1,7 +1,7 @@
 # build
 build/
 
-test.cpp
+test*.cpp
 
 .vscode/
 CMakeCache.txt
