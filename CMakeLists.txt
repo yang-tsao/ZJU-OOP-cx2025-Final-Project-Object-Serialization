@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.10)
+project(ser_demo)
+set(CMAKE_CXX_STANDARD 17)
+include_directories(${CMAKE_SOURCE_DIR} tinyxml2)
+add_executable(demo main.cpp)
+target_link_libraries(demo PRIVATE ${CMAKE_SOURCE_DIR}/tinyxml2/tinyxml2.cpp)
