@@ -17,6 +17,7 @@ struct UserDefinedType
     std::vector<double> data;
     // For binser
     BINSER_SERIALIZABLE(idx, idy, name, data)
+
     XMLSERIALIZABLE(idx, idy, name, data)
 };
 

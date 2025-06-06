@@ -1,5 +1,4 @@
 #pragma once
-#include <concepts>
 #include <fstream>
 #include <list>
 #include <map>
@@ -7,7 +6,6 @@
 #include <set>
 #include <string>
 #include <type_traits>
-#include <utility>
 #include <vector>
 
 namespace binser
@@ -61,16 +59,10 @@ namespace binser
     }
 
     // Generic serialize for containers with size() and iterable (vector, list, set, etc.)
-    template <typename Container>
-        requires requires(const Container &c) {
-            c.size();
-            c.begin();
-            c.end();
-        }
+    template <std::ranges::sized_range Container>
     void serialize(const Container &c, std::ostream &os)
     {
-        size_t sz = c.size();
-        serialize(sz, os);
+        serialize(c.size(), os);
         for (const auto &e : c)
             serialize(e, os);
     }
@@ -85,31 +77,23 @@ namespace binser
             deserialize(e, is);
     }
 
-    template <typename T>
-    void deserialize(std::list<T> &l, std::istream &is)
-    {
-        size_t sz;
-        deserialize(sz, is);
-        l.clear();
-        for (size_t i = 0; i < sz; ++i)
-        {
-            T e;
-            deserialize(e, is);
-            l.push_back(e);
+    template <typename Container>
+        requires requires(Container container) {
+            container.clear();                                                                                              // Must have clear()
+            container.insert(std::declval<typename Container::iterator>(), std::declval<typename Container::value_type>()); // Must have insert(iterator, value)
+            container.end();                                                                                                // Must have end()
         }
-    }
-
-    template <typename T>
-    void deserialize(std::set<T> &s, std::istream &is)
+    void deserialize(Container &c, std::istream &is)
     {
+        using T = typename Container::value_type;
         size_t sz;
         deserialize(sz, is);
-        s.clear();
+        c.clear();
         for (size_t i = 0; i < sz; ++i)
         {
             T e;
             deserialize(e, is);
-            s.insert(e);
+            c.insert(c.end(), e);
         }
     }
 

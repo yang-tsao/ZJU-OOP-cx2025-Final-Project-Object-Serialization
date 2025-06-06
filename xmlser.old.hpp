@@ -1,18 +1,20 @@
 #pragma once
-#include <deque>
 #include <list>
 #include <map>
 #include <memory>
 #include <set>
+#include <sstream>
 #include <string>
 #include <tinyxml2.h>
 #include <type_traits>
+#include <utility>
 #include <unordered_set>
+#include <deque>
 #include <vector>
 
 namespace xmlser
 {
-    // Removed 'using namespace tinyxml2;' to avoid namespace pollution
+    using namespace tinyxml2;
 
     // Forward declarations
     template <typename T>
@@ -32,10 +34,6 @@ namespace xmlser
 
     template <typename T>
     constexpr bool is_pair_v = is_specialization_of_v<T, std::pair>;
-
-    template <typename T>
-    concept Pair = is_pair_v<T>;
-
     template <typename T>
     constexpr bool is_vector_v = is_specialization_of_v<T, std::vector>;
     template <typename T>
@@ -46,16 +44,7 @@ namespace xmlser
     constexpr bool is_map_v = is_specialization_of_v<T, std::map>;
 
     template <typename T>
-    constexpr bool is_deque_v = is_specialization_of_v<T, std::deque>;
-    template <typename T>
-    constexpr bool is_unordered_set_v = is_specialization_of_v<T, std::unordered_set>;
-
-    template <typename T>
-    constexpr bool is_container_v = is_vector_v<T> || is_list_v<T> || is_set_v<T> || is_deque_v<T> || is_unordered_set_v<T>;
-
-
-    template <typename T>
-    concept Container = is_container_v<T>;
+    constexpr bool is_container_v = is_vector_v<T> || is_list_v<T> || is_set_v<T>;
 
     template <typename T>
     constexpr bool is_natively_supported_v = std::is_arithmetic_v<T> || is_string_v<T> || is_pair_v<T> || is_container_v<T> || is_map_v<T>;
@@ -63,23 +52,23 @@ namespace xmlser
     // --- Serialization for arithmetic types ---
     template <typename T>
     std::enable_if_t<std::is_arithmetic_v<T>>
-    serialize_xml(const T &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
+    serialize_xml(const T &obj, XMLElement *elem, XMLDocument &doc)
     {
         elem->SetAttribute("val", obj);
     }
     template <typename T>
     std::enable_if_t<std::is_arithmetic_v<T>>
-    deserialize_xml(T &obj, const tinyxml2::XMLElement *elem)
+    deserialize_xml(T &obj, const XMLElement *elem)
     {
         elem->QueryAttribute("val", &obj);
     }
 
     // --- Serialization for std::string ---
-    inline void serialize_xml(const std::string &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
+    inline void serialize_xml(const std::string &obj, XMLElement *elem, XMLDocument &doc)
     {
         elem->SetText(obj.c_str());
     }
-    inline void deserialize_xml(std::string &obj, const tinyxml2::XMLElement *elem)
+    inline void deserialize_xml(std::string &obj, const XMLElement *elem)
     {
         const char *txt = elem->GetText();
         obj = txt ? txt : "";
@@ -87,43 +76,44 @@ namespace xmlser
 
     // --- Serialization for std::pair ---
     template <typename T1, typename T2>
-    void serialize_xml(const std::pair<T1, T2> &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
+    void serialize_xml(const std::pair<T1, T2> &obj, XMLElement *elem, XMLDocument &doc)
     {
-        tinyxml2::XMLElement *first = doc.NewElement("first");
+        XMLElement *first = doc.NewElement("first");
         serialize_xml(obj.first, first, doc);
         elem->InsertEndChild(first);
-        tinyxml2::XMLElement *second = doc.NewElement("second");
+        XMLElement *second = doc.NewElement("second");
         serialize_xml(obj.second, second, doc);
         elem->InsertEndChild(second);
     }
-    template <Pair T>
-    void deserialize_xml(T &obj, const tinyxml2::XMLElement *elem)
+    template <typename T1, typename T2>
+    void deserialize_xml(std::pair<T1, T2> &obj, const XMLElement *elem)
     {
-        const tinyxml2::XMLElement *first = elem->FirstChildElement("first");
+        const XMLElement *first = elem->FirstChildElement("first");
         deserialize_xml(obj.first, first);
-        const tinyxml2::XMLElement *second = elem->FirstChildElement("second");
+        const XMLElement *second = elem->FirstChildElement("second");
         deserialize_xml(obj.second, second);
     }
 
-    // --- Serialization for standard containers (vector, list, set) using concepts ---
-    template <Container T>
-    void serialize_xml(const T &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
+    // --- Serialization for standard containers (vector, list, set) ---
+    template <typename Container>
+    std::enable_if_t<is_container_v<Container>>
+    serialize_xml(const Container &obj, XMLElement *elem, XMLDocument &doc)
     {
         for (const auto &item : obj)
         {
-            tinyxml2::XMLElement *child = doc.NewElement("item");
+            XMLElement *child = doc.NewElement("item");
             serialize_xml(item, child, doc);
             elem->InsertEndChild(child);
         }
     }
-    
-    template <Container T>
-    void deserialize_xml(T &obj, const tinyxml2::XMLElement *elem)
+    template <typename Container>
+    std::enable_if_t<is_container_v<Container>>
+    deserialize_xml(Container &obj, const XMLElement *elem)
     {
         obj.clear();
-        for (const tinyxml2::XMLElement *child = elem->FirstChildElement("item"); child; child = child->NextSiblingElement("item"))
+        for (const XMLElement *child = elem->FirstChildElement("item"); child; child = child->NextSiblingElement("item"))
         {
-            typename T::value_type val;
+            typename Container::value_type val;
             deserialize_xml(val, child);
             obj.insert(obj.end(), val);
         }
@@ -131,20 +121,20 @@ namespace xmlser
 
     // --- Serialization for std::map ---
     template <typename K, typename V>
-    void serialize_xml(const std::map<K, V> &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
+    void serialize_xml(const std::map<K, V> &obj, XMLElement *elem, XMLDocument &doc)
     {
         for (const auto &p : obj)
         {
-            tinyxml2::XMLElement *child = doc.NewElement("item");
+            XMLElement *child = doc.NewElement("item");
             serialize_xml(p, child, doc);
             elem->InsertEndChild(child);
         }
     }
     template <typename K, typename V>
-    void deserialize_xml(std::map<K, V> &obj, const tinyxml2::XMLElement *elem)
+    void deserialize_xml(std::map<K, V> &obj, const XMLElement *elem)
     {
         obj.clear();
-        for (const tinyxml2::XMLElement *child = elem->FirstChildElement("item"); child; child = child->NextSiblingElement("item"))
+        for (const XMLElement *child = elem->FirstChildElement("item"); child; child = child->NextSiblingElement("item"))
         {
             std::pair<K, V> p;
             deserialize_xml(p, child);
@@ -154,27 +144,27 @@ namespace xmlser
 
     // --- Serialization for std::unique_ptr ---
     template <typename T>
-    void serialize_xml(const std::unique_ptr<T> &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
+    void serialize_xml(const std::unique_ptr<T> &obj, XMLElement *elem, XMLDocument &doc)
     {
         // Serialize presence as attribute
         elem->SetAttribute("has_value", static_cast<bool>(obj));
         if (obj)
         {
-            tinyxml2::XMLElement *child = doc.NewElement("value");
+            XMLElement *child = doc.NewElement("value");
             serialize_xml(*obj, child, doc);
             elem->InsertEndChild(child);
         }
     }
     template <typename T>
-    void deserialize_xml(std::unique_ptr<T> &obj, const tinyxml2::XMLElement *elem)
+    void deserialize_xml(std::unique_ptr<T> &obj, const XMLElement *elem)
     {
         bool has_value = false;
         elem->QueryBoolAttribute("has_value", &has_value);
         if (has_value)
         {
-            const tinyxml2::XMLElement *child = elem->FirstChildElement("value");
+            const XMLElement *child = elem->FirstChildElement("value");
             if (!child)
-                throw std::runtime_error("Missing <value> for unique_ptr in element '" + std::string(elem->Name()) + "' while processing file.");
+                throw std::runtime_error("Missing <value> for unique_ptr");
             obj = std::make_unique<T>();
             deserialize_xml(*obj, child);
         }
@@ -183,33 +173,23 @@ namespace xmlser
     }
 
     // --- User-defined type support macro ---
-    // This macro simplifies the implementation of serialization and deserialization
-    // for user-defined types. It generates `serialize_xml` and `deserialize_xml` methods
-    // that recursively process the provided member variables.
-    // Usage:
-    // struct MyStruct {
-    //     int a;
-    //     std::string b;
-    //     XMLSERIALIZABLE(a, b)
-    // };
-    // This will allow `MyStruct` to be serialized and deserialized using the xmlser library.
 #define XMLSERIALIZABLE(...)                                                                                                              \
     void serialize_xml(tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc) const { xmlser::serialize_xml_r(elem, doc, __VA_ARGS__); } \
     void deserialize_xml(const tinyxml2::XMLElement *elem) { xmlser::deserialize_xml_r(elem->FirstChildElement(), __VA_ARGS__); }
 
     // Helper for user-defined types: recursive serialization
-    inline void serialize_xml_r(tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc) {}
-    inline void deserialize_xml_r(const tinyxml2::XMLElement * /*elem*/) {}
+    inline void serialize_xml_r(XMLElement *elem, XMLDocument &doc) {}
+    inline void deserialize_xml_r(const XMLElement * /*elem*/) {}
     template <typename First, typename... Rest>
-    void serialize_xml_r(tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc, const First &first, const Rest &...rest)
+    void serialize_xml_r(XMLElement *elem, XMLDocument &doc, const First &first, const Rest &...rest)
     {
-        tinyxml2::XMLElement *child = doc.NewElement(typeid(First).name());
+        XMLElement *child = doc.NewElement(typeid(First).name());
         serialize_xml(first, child, doc);
         elem->InsertEndChild(child);
         serialize_xml_r(elem, doc, rest...);
     }
     template <typename First, typename... Rest>
-    void deserialize_xml_r(const tinyxml2::XMLElement *child, First &first, Rest &...rest)
+    void deserialize_xml_r(const XMLElement *child, First &first, Rest &...rest)
     {
         if (!child)
             return;
@@ -217,17 +197,15 @@ namespace xmlser
         deserialize_xml_r(child->NextSiblingElement(), rest...);
     }
     // --- User-defined type fallback ---
-    // Assumes that the type implements `serialize_xml` and `deserialize_xml`.
-    // Static assertions enforce this requirement.
     template <typename T>
-        requires(!is_natively_supported_v<T> && requires(const T &t, tinyxml2::XMLElement *e, tinyxml2::XMLDocument &d) { t.serialize_xml(e, d); })
-    void serialize_xml(const T &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
+    std::enable_if_t<!is_natively_supported_v<T>>
+    serialize_xml(const T &obj, XMLElement *elem, XMLDocument &doc)
     {
         obj.serialize_xml(elem, doc);
     }
     template <typename T>
-        requires(!is_natively_supported_v<T> && requires(T &t, const tinyxml2::XMLElement *e) { t.deserialize_xml(e); })
-    void deserialize_xml(T &obj, const tinyxml2::XMLElement *elem)
+    std::enable_if_t<!is_natively_supported_v<T>>
+    deserialize_xml(T &obj, const XMLElement *elem)
     {
         obj.deserialize_xml(elem);
     }
@@ -236,10 +214,10 @@ namespace xmlser
     template <typename T>
     void serialize_xml(const T &obj, const std::string &name, const std::string &filename)
     {
-        tinyxml2::XMLDocument doc;
-        tinyxml2::XMLElement *root = doc.NewElement("serialization");
+        XMLDocument doc;
+        XMLElement *root = doc.NewElement("serialization");
         doc.InsertFirstChild(root);
-        tinyxml2::XMLElement *elem = doc.NewElement(name.c_str());
+        XMLElement *elem = doc.NewElement(name.c_str());
         serialize_xml(obj, elem, doc);
         root->InsertEndChild(elem);
         doc.SaveFile(filename.c_str());
@@ -247,14 +225,14 @@ namespace xmlser
     template <typename T>
     void deserialize_xml(T &obj, const std::string &name, const std::string &filename)
     {
-        tinyxml2::XMLDocument doc;
+        XMLDocument doc;
         doc.LoadFile(filename.c_str());
-        const tinyxml2::XMLElement *root = doc.FirstChildElement("serialization");
+        const XMLElement *root = doc.FirstChildElement("serialization");
         if (!root)
-            throw std::runtime_error("No <serialization> root in file: " + filename);
-        const tinyxml2::XMLElement *elem = root->FirstChildElement(name.c_str());
+            throw std::runtime_error("No <serialization> root");
+        const XMLElement *elem = root->FirstChildElement(name.c_str());
         if (!elem)
-            throw std::runtime_error("No element with name '" + name + "' in file '" + filename + "'");
+            throw std::runtime_error("No element with given name");
         deserialize_xml(obj, elem);
     }
 
