@@ -1,4 +1,5 @@
 #pragma once
+#include "base64.hpp"
 #include <deque>
 #include <list>
 #include <map>
@@ -53,25 +54,47 @@ namespace xmlser
     template <typename T>
     constexpr bool is_container_v = is_vector_v<T> || is_list_v<T> || is_set_v<T> || is_deque_v<T> || is_unordered_set_v<T>;
 
-
     template <typename T>
     concept Container = is_container_v<T>;
 
     template <typename T>
-    constexpr bool is_natively_supported_v = std::is_arithmetic_v<T> || is_string_v<T> || is_pair_v<T> || is_container_v<T> || is_map_v<T>;
+    constexpr bool is_natively_supported_v = std::is_trivially_copyable_v<T> || is_string_v<T> || is_pair_v<T> || is_container_v<T> || is_map_v<T>;
 
     // --- Serialization for arithmetic types ---
     template <typename T>
-    std::enable_if_t<std::is_arithmetic_v<T>>
+    std::enable_if_t<std::is_trivially_copyable_v<T>>
     serialize_xml(const T &obj, tinyxml2::XMLElement *elem, tinyxml2::XMLDocument &doc)
     {
-        elem->SetAttribute("val", obj);
+        if constexpr (std::is_arithmetic_v<T>) {
+            elem->SetAttribute("val", obj);
+        } else {
+            // base64 encode
+            std::string b64;
+            base64::base64_encode(b64, reinterpret_cast<const uint8_t *>(&obj), sizeof(T));
+            elem->SetText(b64.c_str());
+            elem->SetAttribute("encoding", "base64");
+            elem->SetAttribute("size", static_cast<size_t>(sizeof(T)));
+        }
     }
     template <typename T>
-    std::enable_if_t<std::is_arithmetic_v<T>>
+    std::enable_if_t<std::is_trivially_copyable_v<T>>
     deserialize_xml(T &obj, const tinyxml2::XMLElement *elem)
     {
-        elem->QueryAttribute("val", &obj);
+        if constexpr (std::is_arithmetic_v<T>) {
+            elem->QueryAttribute("val", &obj);
+        } else {
+            // base64 decode
+            const char *txt = elem->GetText();
+            if (!txt) throw std::runtime_error("Missing base64 text for trivially copyable type");
+            std::string b64 = txt;
+            std::string decoded;
+            base64::base64_decode(decoded, b64);
+            size_t sz = 0;
+            elem->QueryUnsigned64Attribute("size", &sz);
+            if (sz != sizeof(T) || decoded.size() != sizeof(T))
+                throw std::runtime_error("Base64 decoded size mismatch for trivially copyable type");
+            std::memcpy(&obj, decoded.data(), sizeof(T));
+        }
     }
 
     // --- Serialization for std::string ---
@@ -116,7 +139,7 @@ namespace xmlser
             elem->InsertEndChild(child);
         }
     }
-    
+
     template <Container T>
     void deserialize_xml(T &obj, const tinyxml2::XMLElement *elem)
     {
